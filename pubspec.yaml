@@ -44,6 +44,7 @@ dependencies:
   permission_handler: ^11.0.1
   flutter_sound: ^9.0.9
   audioplayers: ^0.20.1
+  shared_preferences: ^2.2.2
 
   
 

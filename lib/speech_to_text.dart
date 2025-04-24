@@ -1,54 +1,32 @@
-
 import 'package:avatar_glow/avatar_glow.dart';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:voice_journal/calendar_page.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-
-
-
-class SpeechText extends StatefulWidget{
+class SpeechText extends StatefulWidget {
   const SpeechText({super.key});
 
   @override
   State<SpeechText> createState() => _SpeechtextState();
-  
 }
 
-class _SpeechtextState extends State<SpeechText>{
+class _SpeechtextState extends State<SpeechText> {
   bool isEditing = false;
   bool isListening = false;
   late stt.SpeechToText _speechToText;
   String text = "Press the button & start speaking";
   double confidence = 1.0;
   late TextEditingController _textController;
-  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
-  final FlutterSoundPlayer _player = FlutterSoundPlayer();
-  String? _audioPath;
-  bool isRecording = false;
 
-
+  Map<DateTime, String> entries = {};
   @override
-    void initState(){
-      super.initState();      
-      _speechToText = stt.SpeechToText();
-      _textController = TextEditingController(text: text);
-      _initAudio();
-
-    }
-  Future<void> _initAudio() async {
-    PermissionStatus status = await Permission.microphone.request();
-      if (status.isGranted) {
-        await _recorder.openRecorder();
-        await _player.openPlayer();
-  } else {
-    print("Microphone permission not granted");
+  void initState() {
+    super.initState();
+    _speechToText = stt.SpeechToText();
+    _textController = TextEditingController(text: text);
+    _loadEntries();
   }
-}
 
   @override
   void dispose() {
@@ -56,9 +34,36 @@ class _SpeechtextState extends State<SpeechText>{
     super.dispose();
   }
 
+  DateTime _normalizeDate(DateTime date) {
+    return DateTime.utc(date.year, date.month, date.day);
+  }
+
+  _loadEntries() async {
+    final prefs = await SharedPreferences.getInstance();
+    Set<String> savedEntries =
+        prefs.getStringList('entries')?.toSet() ?? <String>{};
+
+    setState(() {
+      for (var entry in savedEntries) {
+        var dateStr = entry.split('|')[0];
+        var textStr = entry.split('|')[1];
+        DateTime date = DateTime.parse(dateStr);
+        entries[date] = textStr;
+      }
+    });
+  }
+
+  _saveEntry(DateTime date, String text) async {
+    final prefs = await SharedPreferences.getInstance();
+    Set<String> savedEntries =
+        prefs.getStringList('entries')?.toSet() ?? <String>{};
+    savedEntries.add('$date|$text');
+    await prefs.setStringList('entries', savedEntries.toList());
+  }
+
   @override
   Widget build(BuildContext context) {
-    return  Scaffold(
+    return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blue,
         toolbarHeight: 80,
@@ -73,171 +78,158 @@ class _SpeechtextState extends State<SpeechText>{
             fontSize: 32,
           ),
         ),
-       actions: [
+        actions: [
           IconButton(
-          icon: const Icon(Icons.calendar_month, color: Colors.white),
+            icon: const Icon(Icons.calendar_month, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const CalendarPage()),
+                MaterialPageRoute(
+                  builder: (context) => CalendarPage(entries: entries),
+                ),
               );
-          },
-        ),
-      ],
-       
+            },
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: AvatarGlow(
         animate: isListening,
         glowColor: Colors.blue,
-        duration:const Duration(milliseconds: 1000),
+        duration: const Duration(milliseconds: 1000),
         repeat: true,
         child: FloatingActionButton(
           backgroundColor: Colors.blue,
-        onPressed:_listen,
-        
-        child: Icon(
-          isListening?
-          Icons.mic: Icons.mic_none,
-          size: 30,
-          color: Colors.white,
-          ),),
-      ),
-        body: SingleChildScrollView( 
-        reverse: true,
-        child: Container(
-          padding: const EdgeInsets.all(30),
-        child: Column(
-          children: [
-            Text(
-  "Confidence: ${(confidence * 100).toStringAsFixed(1)}%",
-  style: const TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.bold,
-    color: Colors.grey,
-  ),
-),
-const SizedBox(height: 20),
-            Row(
-              
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    
-    Expanded(
-      child: isEditing
-      
-          ? TextField(
-              onChanged: (value) {
-                text = value;
-              },
-              controller: TextEditingController(text: text),
-              maxLines: null,
-              
-              style: const TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-              ),
-            )
-          : Text(
-              text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-    ),
-    const SizedBox(width: 10),
-    Tooltip(
-      message: isEditing ? 'Save changes' : 'Edit',
-      child: IconButton(
-        icon: Icon(isEditing ? Icons.check : Icons.edit),
-        onPressed: () {
-          setState(() {
-            isEditing = !isEditing;
-          });
-        },
-      ),
-    ),
-  ],
-),
+          onPressed: _listen,
 
-        
-        
-        const SizedBox(height: 20),
-      ElevatedButton(
-        onPressed: (){
-
-        },
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-        child: const Text(
-          'Save Entry',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+          child: Icon(
+            isListening ? Icons.mic : Icons.mic_none,
+            size: 30,
             color: Colors.white,
           ),
         ),
       ),
-      if (_audioPath != null)
-  Column(
-    children: [
-      const SizedBox(height: 20),
-      ElevatedButton.icon(
-        onPressed: () async {
-          await _player.startPlayer(
-            fromURI: _audioPath,
-            codec: Codec.aacMP4,
-            whenFinished: () {
-              setState(() {});
-            },
-          );
-        },
-        icon: const Icon(Icons.play_arrow),
-        label: const Text('Play Recording'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-      ),
-    ],
-  ),
+      body: SingleChildScrollView(
+        reverse: true,
+        child: Container(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            children: [
+              Text(
+                "Confidence: ${(confidence * 100).toStringAsFixed(1)}%",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 20),
 
-        ],)),),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child:
+                        isEditing && text != "Press the button & start speaking"
+                            ? TextField(
+                              onChanged: (value) {
+                                text = value;
+                              },
+                              controller: TextEditingController(text: text),
+                              maxLines: null,
+
+                              style: const TextStyle(
+                                fontSize: 25,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                              ),
+                            )
+                            : Text(
+                              text,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 25,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (text != "Press the button & start speaking")
+                    Tooltip(
+                      message: isEditing ? 'Save changes' : 'Edit',
+                      child: IconButton(
+                        icon: Icon(isEditing ? Icons.check : Icons.edit),
+                        onPressed: () {
+                          setState(() {
+                            isEditing = !isEditing;
+                          });
+                        },
+                      ),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  DateTime today = DateTime.now();
+                  setState(() {
+                    entries[_normalizeDate(today)] = text;
+                  });
+                  _saveEntry(today, text);
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Entry saved!')));
+                },
+
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                child: const Text(
+                  'Save Entry',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
-  
+
   void _listen() async {
     if (!isListening) {
       bool available = await _speechToText.initialize(
         onStatus: (status) => print('status: $status'),
         onError: (error) => print('error: $error'),
-       
       );
       if (available) {
         setState(() => isListening = true);
-         Directory tempDir = await getTemporaryDirectory();
-          _audioPath = '${tempDir.path}/recorded_audio.aac';
-          await _recorder.startRecorder(toFile: _audioPath, codec: Codec.aacMP4);
-
-        await _speechToText.listen(
-           localeId: 'sr-RS',
+        _speechToText.listen(
+          localeId: 'sr-RS',
           onResult: (result) {
-          setState(() {
-            
-            text = result.recognizedWords.isNotEmpty
-                ? result.recognizedWords[0].toUpperCase() +
-                    result.recognizedWords.substring(1)
-                : '';
-            _textController.text = text;
-            if (result.hasConfidenceRating && result.confidence > 0) {
-              confidence = result.confidence;
-            }
-          });
-        });
+            setState(() {
+              text =
+                  result.recognizedWords.isNotEmpty
+                      ? result.recognizedWords[0].toUpperCase() +
+                          result.recognizedWords.substring(1)
+                      : '';
+              _textController.text = text;
+              if (result.hasConfidenceRating && result.confidence > 0) {
+                confidence = result.confidence;
+              }
+            });
+          },
+        );
       }
     } else {
       setState(() => isListening = false);
       await _speechToText.stop();
-      await _recorder.stopRecorder();
-      
     }
   }
 }

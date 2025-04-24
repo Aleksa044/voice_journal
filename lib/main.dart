@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'speech_to_text.dart'; 
+import 'speech_to_text.dart';
 
 void main() async {
-
   runApp(const MyApp());
 }
 
